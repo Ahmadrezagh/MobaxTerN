@@ -7,6 +7,7 @@ import tkinter as tk
 from tkinter import scrolledtext, ttk
 
 from core.ssh_client import SshConnection
+from ui.theme import COLORS
 
 _CLEAR_RE = re.compile(r"\x1b\[[0-9;]*2J|\x1b\[[0-9;]*3J|\x1bc|\x0c")
 _ANSI_RE = re.compile(
@@ -42,12 +43,14 @@ class TerminalWidget(ttk.Frame):
         self.screen = scrolledtext.ScrolledText(
             self,
             wrap=tk.NONE,
-            bg="#1e1e1e",
-            fg="#d4d4d4",
-            insertbackground="#d4d4d4",
+            bg=COLORS["terminal_bg"],
+            fg=COLORS["terminal_fg"],
+            insertbackground=COLORS["terminal_fg"],
             font=("Menlo", 11),
             undo=False,
             maxundo=0,
+            borderwidth=0,
+            highlightthickness=0,
         )
         self.screen.pack(fill=tk.BOTH, expand=True)
         self.screen.bind("<Key>", self._on_key)
@@ -63,7 +66,7 @@ class TerminalWidget(ttk.Frame):
         hint = ttk.Label(
             self,
             text="Type here like a real terminal · ↑↓ history · Ctrl+C stop · Ctrl+D exit",
-            foreground="#888",
+            style="Muted.TLabel",
         )
         hint.pack(anchor="w", padx=6, pady=4)
 
