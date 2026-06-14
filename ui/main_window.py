@@ -84,10 +84,14 @@ class MainWindow(tk.Tk):
         self.style = apply_theme(self, dark=self.dark_mode_var.get())
         self.session_canvas.configure(bg=canvas_bg())
         was_connected = self.connection.connected
-        self._refresh_session_list()
         if was_connected:
-            self._mount_workspace()
+            session = next(
+                (s for s in self.sessions if s.name == self._connected_session_name), None
+            )
+            self._mount_workspace(session)
         else:
+            self._show_sessions_sidebar()
+            self._refresh_session_list()
             self._show_placeholders()
 
     def _build_ui(self) -> None:
@@ -102,7 +106,10 @@ class MainWindow(tk.Tk):
 
         left = self.left_panel
 
-        header = ttk.Frame(left, style="Sidebar.TFrame")
+        self.sessions_view = ttk.Frame(left, style="Sidebar.TFrame")
+        self.sessions_view.pack(fill=tk.BOTH, expand=True)
+
+        header = ttk.Frame(self.sessions_view, style="Sidebar.TFrame")
         header.pack(fill=tk.X, padx=10, pady=(8, 6))
         ttk.Label(header, text="Saved Sessions", style="Heading.TLabel").pack(side=tk.LEFT)
         self.dark_mode_btn = ttk.Checkbutton(
@@ -114,7 +121,7 @@ class MainWindow(tk.Tk):
         )
         self.dark_mode_btn.pack(side=tk.RIGHT)
 
-        list_frame = ttk.Frame(left, style="Sidebar.TFrame")
+        list_frame = ttk.Frame(self.sessions_view, style="Sidebar.TFrame")
         list_frame.pack(fill=tk.BOTH, expand=True, padx=8)
         self.session_canvas = tk.Canvas(
             list_frame, highlightthickness=0, borderwidth=0, bg=canvas_bg()
@@ -143,24 +150,32 @@ class MainWindow(tk.Tk):
         self.session_canvas.bind("<Enter>", self._bind_session_scroll)
         self.session_canvas.bind("<Leave>", self._unbind_session_scroll)
 
-        btn_frame = ttk.Frame(left, style="Sidebar.TFrame")
+        btn_frame = ttk.Frame(self.sessions_view, style="Sidebar.TFrame")
         btn_frame.pack(fill=tk.X, padx=8, pady=8)
         ttk.Button(
             btn_frame, text="New", style="Primary.TButton", command=self._new_session
         ).pack(fill=tk.X)
 
-        right = ttk.Frame(self.paned)
-        self.paned.add(right, weight=1)
+        self.sftp_view = ttk.Frame(left, style="Sidebar.TFrame")
+        sftp_header = ttk.Frame(self.sftp_view, style="Sidebar.TFrame")
+        sftp_header.pack(fill=tk.X, padx=8, pady=(8, 4))
+        self.sftp_session_label = ttk.Label(sftp_header, text="SFTP", style="Heading.TLabel")
+        self.sftp_session_label.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        ttk.Button(
+            sftp_header, text="Disconnect", style="Danger.TButton", command=self._disconnect
+        ).pack(side=tk.RIGHT)
 
-        self.notebook = ttk.Notebook(right)
-        self.notebook.pack(fill=tk.BOTH, expand=True)
+        self.sftp_host = ttk.Frame(self.sftp_view, style="Sidebar.TFrame")
+        self.sftp_host.pack(fill=tk.BOTH, expand=True)
 
-        self.terminal_frame = ttk.Frame(self.notebook)
-        self.sftp_frame = ttk.Frame(self.notebook)
-        self.notebook.add(self.terminal_frame, text="Command Line")
-        self.notebook.add(self.sftp_frame, text="SFTP")
+        self.right_panel = ttk.Frame(self.paned)
+        self.paned.add(self.right_panel, weight=1)
+
+        self.terminal_frame = ttk.Frame(self.right_panel)
+        self.terminal_frame.pack(fill=tk.BOTH, expand=True)
 
         self._show_placeholders()
+        self._show_sessions_sidebar()
         self.after(100, self._enforce_sidebar_width)
 
     def _enforce_sidebar_width(self, _event=None) -> None:
@@ -170,14 +185,25 @@ class MainWindow(tk.Tk):
         except tk.TclError:
             pass
 
+    def _show_sessions_sidebar(self) -> None:
+        self.sftp_view.pack_forget()
+        self.sessions_view.pack(fill=tk.BOTH, expand=True)
+
+    def _show_sftp_sidebar(self, session: SshSession) -> None:
+        self.sessions_view.pack_forget()
+        self.sftp_session_label.configure(
+            text=f"{session.name}\n{session.username}@{session.host}"
+        )
+        self.sftp_view.pack(fill=tk.BOTH, expand=True)
+
     def _show_placeholders(self) -> None:
-        for frame, msg in (
-            (self.terminal_frame, "Connect to a session to open the command line tab."),
-            (self.sftp_frame, "Connect to a session to browse remote files via SFTP."),
-        ):
-            for child in frame.winfo_children():
-                child.destroy()
-            ttk.Label(frame, text=msg, style="Muted.TLabel").pack(expand=True)
+        for child in self.terminal_frame.winfo_children():
+            child.destroy()
+        ttk.Label(
+            self.terminal_frame,
+            text="Connect to a session to open the command line.",
+            style="Muted.TLabel",
+        ).pack(expand=True)
 
     def _bind_session_scroll(self, _event=None) -> None:
         self.session_canvas.bind_all("<MouseWheel>", self._on_session_mousewheel)
@@ -219,8 +245,7 @@ class MainWindow(tk.Tk):
 
     def _add_session_row(self, session: SshSession, selected_name: str | None = None) -> None:
         is_selected = selected_name == session.name
-        is_connected = self._connected_session_name == session.name
-        prefix = "Selected." if is_selected else "Connected." if is_connected else ""
+        prefix = "Selected." if is_selected else ""
 
         row = ttk.Frame(self.session_container, style=f"{prefix}Session.TFrame" if prefix else "Session.TFrame")
         row.pack(fill=tk.X, pady=4, padx=2)
@@ -229,41 +254,24 @@ class MainWindow(tk.Tk):
         inner.pack(fill=tk.X, padx=6, pady=6)
         inner.columnconfigure(0, weight=1)
 
-        title_row = ttk.Frame(inner, style=f"{prefix}SessionInner.TFrame")
-        title_row.grid(row=0, column=0, columnspan=2, sticky="ew")
-        title_row.columnconfigure(0, weight=1)
-
         ttk.Label(
-            title_row,
+            inner,
             text=session.name,
             style=f"{prefix}SessionName.TLabel" if prefix else "SessionName.TLabel",
         ).grid(row=0, column=0, sticky="w")
-
-        if is_connected:
-            ttk.Label(
-                title_row,
-                text="Connected",
-                style=f"{prefix}SessionBadge.TLabel" if prefix else "SessionBadge.TLabel",
-            ).grid(row=0, column=1, sticky="e", padx=(8, 0))
 
         ttk.Label(
             inner,
             text=f"{session.username}@{session.host}:{session.port}",
             style=f"{prefix}SessionSub.TLabel" if prefix else "SessionSub.TLabel",
-        ).grid(row=1, column=0, columnspan=2, sticky="w", pady=(2, 0))
+        ).grid(row=1, column=0, sticky="w", pady=(2, 0))
 
         actions = ttk.Frame(inner, style=f"{prefix}SessionInner.TFrame")
-        actions.grid(row=2, column=0, columnspan=2, sticky="w", pady=(6, 0))
-        if is_connected:
-            ttk.Button(
-                actions, text="Disconnect", width=8, style="Small.TButton",
-                command=lambda s=session: self._disconnect_session(s),
-            ).pack(side=tk.LEFT, padx=(0, 3))
-        else:
-            ttk.Button(
-                actions, text="Connect", width=7, style="Primary.TButton",
-                command=lambda s=session: self._connect_session(s),
-            ).pack(side=tk.LEFT, padx=(0, 3))
+        actions.grid(row=2, column=0, sticky="w", pady=(6, 0))
+        ttk.Button(
+            actions, text="Connect", width=7, style="Primary.TButton",
+            command=lambda s=session: self._connect_session(s),
+        ).pack(side=tk.LEFT, padx=(0, 3))
         ttk.Button(
             actions, text="Edit", width=6, style="Small.TButton",
             command=lambda s=session: self._edit_session_direct(s),
@@ -272,11 +280,10 @@ class MainWindow(tk.Tk):
             actions, text="Delete", width=6, style="Danger.TButton",
             command=lambda s=session: self._delete_session_direct(s),
         ).pack(side=tk.LEFT)
-
         row._session = session  # type: ignore[attr-defined]
         row._inner = inner  # type: ignore[attr-defined]
 
-        for widget in (row, inner, title_row):
+        for widget in (row, inner):
             widget.bind("<Button-1>", lambda _e, s=session, r=row: self._select_session_row(s, r))
             widget.bind("<Double-Button-1>", lambda _e, s=session: self._connect_session(s))
         for child in inner.winfo_children():
@@ -296,11 +303,7 @@ class MainWindow(tk.Tk):
         self._set_row_prefix(row, "Selected.")
 
     def _restyle_row(self, row: ttk.Frame) -> None:
-        session: SshSession = row._session  # type: ignore[attr-defined]
-        if self._connected_session_name == session.name:
-            self._set_row_prefix(row, "Connected.")
-        else:
-            self._set_row_prefix(row, "")
+        self._set_row_prefix(row, "")
 
     def _set_row_prefix(self, row: ttk.Frame, prefix: str) -> None:
         row.configure(style=f"{prefix}Session.TFrame" if prefix else "Session.TFrame")
@@ -410,34 +413,39 @@ class MainWindow(tk.Tk):
 
         self._connected_session_name = session.name
         self._selected_session_obj = session
-        self._mount_workspace()
-        self._refresh_session_list()
+        self._mount_workspace(session)
         self.status_var.set(f"Connected to {session.username}@{session.host}:{session.port}")
-
-    def _disconnect_session(self, session: SshSession) -> None:
-        if self._connected_session_name != session.name:
-            return
-        self._disconnect()
 
     def _disconnect(self) -> None:
         self.connection.disconnect()
         self._connected_session_name = None
         self._terminal_widget = None
         self._sftp_widget = None
+        for child in self.sftp_host.winfo_children():
+            child.destroy()
+        self._show_sessions_sidebar()
         self._show_placeholders()
         self.status_var.set("Disconnected")
         self._refresh_session_list()
 
-    def _mount_workspace(self) -> None:
+    def _mount_workspace(self, session: SshSession | None = None) -> None:
+        if session is None and self._connected_session_name:
+            session = next(
+                (s for s in self.sessions if s.name == self._connected_session_name), None
+            )
+        if session is None:
+            return
+
         for child in self.terminal_frame.winfo_children():
             child.destroy()
-        for child in self.sftp_frame.winfo_children():
+        for child in self.sftp_host.winfo_children():
             child.destroy()
 
+        self._show_sftp_sidebar(session)
         self._terminal_widget = TerminalWidget(self.terminal_frame, self.connection)
         self._terminal_widget.pack(fill=tk.BOTH, expand=True)
 
-        self._sftp_widget = SftpPanel(self.sftp_frame, self.connection)
+        self._sftp_widget = SftpPanel(self.sftp_host, self.connection, compact=True)
         self._sftp_widget.pack(fill=tk.BOTH, expand=True)
 
     def destroy(self) -> None:

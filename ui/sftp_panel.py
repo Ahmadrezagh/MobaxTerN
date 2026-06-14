@@ -10,44 +10,66 @@ from core.ssh_client import RemoteEntry, SshConnection
 
 
 class SftpPanel(ttk.Frame):
-    def __init__(self, parent, connection: SshConnection) -> None:
+    def __init__(self, parent, connection: SshConnection, *, compact: bool = False) -> None:
         super().__init__(parent)
         self.connection = connection
+        self.compact = compact
         try:
             self.current_path = connection.getcwd()
         except Exception:
             self.current_path = "."
 
-        ttk.Label(self, text="Remote path:").pack(anchor="w", padx=4, pady=(4, 0))
+        ttk.Label(self, text="Remote path:", style="Sidebar.TLabel" if compact else "TLabel").pack(
+            anchor="w", padx=4, pady=(4, 0)
+        )
         self.path_var = tk.StringVar(value=self.current_path)
         path_row = ttk.Frame(self)
         path_row.pack(fill=tk.X, padx=4, pady=4)
         self.path_entry = ttk.Entry(path_row, textvariable=self.path_var)
         self.path_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
         self.path_entry.bind("<Return>", self._on_path_enter)
-        ttk.Button(path_row, text="Go", command=self._go_to_entered_path).pack(
-            side=tk.LEFT, padx=(6, 0)
+        ttk.Button(path_row, text="Go", style="Small.TButton", command=self._go_to_entered_path).pack(
+            side=tk.LEFT, padx=(4, 0)
         )
 
         toolbar = ttk.Frame(self)
         toolbar.pack(fill=tk.X, padx=4, pady=4)
-        ttk.Button(toolbar, text="Up", command=self._go_up).pack(side="left", padx=2)
-        ttk.Button(toolbar, text="Refresh", command=self.refresh).pack(side="left", padx=2)
-        ttk.Button(toolbar, text="Upload", command=self.upload_files).pack(side="left", padx=2)
-        ttk.Button(toolbar, text="Download", command=self.download_files).pack(side="left", padx=2)
+        if compact:
+            row1 = ttk.Frame(toolbar)
+            row1.pack(fill=tk.X)
+            ttk.Button(row1, text="Up", style="Small.TButton", command=self._go_up).pack(
+                side="left", padx=1, fill=tk.X, expand=True
+            )
+            ttk.Button(row1, text="Refresh", style="Small.TButton", command=self.refresh).pack(
+                side="left", padx=1, fill=tk.X, expand=True
+            )
+            row2 = ttk.Frame(toolbar)
+            row2.pack(fill=tk.X, pady=(4, 0))
+            ttk.Button(row2, text="Upload", style="Small.TButton", command=self.upload_files).pack(
+                side="left", padx=1, fill=tk.X, expand=True
+            )
+            ttk.Button(row2, text="Download", style="Small.TButton", command=self.download_files).pack(
+                side="left", padx=1, fill=tk.X, expand=True
+            )
+        else:
+            ttk.Button(toolbar, text="Up", command=self._go_up).pack(side="left", padx=2)
+            ttk.Button(toolbar, text="Refresh", command=self.refresh).pack(side="left", padx=2)
+            ttk.Button(toolbar, text="Upload", command=self.upload_files).pack(side="left", padx=2)
+            ttk.Button(toolbar, text="Download", command=self.download_files).pack(side="left", padx=2)
 
         tree_frame = ttk.Frame(self)
         tree_frame.pack(fill="both", expand=True, padx=4, pady=4)
 
+        name_w = 110 if compact else 220
         self.tree = ttk.Treeview(
             tree_frame, columns=("size", "type"), show="tree headings", selectmode="extended"
         )
         self.tree.heading("#0", text="Name")
         self.tree.heading("size", text="Size")
         self.tree.heading("type", text="Type")
-        self.tree.column("#0", width=220)
-        self.tree.column("size", width=80)
-        self.tree.column("type", width=80)
+        self.tree.column("#0", width=name_w)
+        self.tree.column("size", width=48 if compact else 80)
+        self.tree.column("type", width=48 if compact else 80)
         self.tree.pack(side="left", fill="both", expand=True)
 
         scroll = ttk.Scrollbar(tree_frame, orient="vertical", command=self.tree.yview)
