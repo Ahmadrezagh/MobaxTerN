@@ -1,30 +1,47 @@
 # MobaxterN
 
-A simple Mobaxterm-style desktop client with SSH sessions, an interactive command line tab, and SFTP file transfer.
+A simple Mobaxterm-style desktop SSH client with an interactive command line and SFTP file browser.
 
 ## Features
 
-- **Saved SSH sessions** — store host, port, username, password, and private key
-- **Command line tab** — interactive shell over SSH
-- **SFTP tab** — remote directory tree with path bar at the top
-- **Upload / download** — transfer files to and from the selected remote directory
-- **GUI** — session list, tabs, toolbar, and menus
+- **Saved SSH sessions** — host, port, username, password, or private key
+- **Command line** — real terminal over SSH (history, Ctrl+C, clear)
+- **SFTP sidebar** — directory tree when connected, with upload/download
+- **Dark mode** — toggle in sidebar or File menu
+- **Cross-platform** — Windows, macOS, Linux
 
-## Requirements
+## Download (releases)
 
-- Python 3.10+ (includes Tkinter for the GUI)
-- macOS, Linux, or Windows
+Pre-built binaries are published on [GitHub Releases](https://github.com/Ahmadrezagh/MobaxTerN/releases).
 
-## Install
+| Platform | File | Run |
+|----------|------|-----|
+| **Windows** | `MobaxterN-windows-x64.zip` | Extract, then run `MobaxterN\MobaxterN.exe` |
+| **macOS** | `MobaxterN-macos-universal.zip` | Extract, then open `MobaxterN.app` |
+| **Linux** | `MobaxterN-linux-x64.tar.gz` | Extract, then run `MobaxterN/MobaxterN` |
+
+> macOS may block the first launch: right-click the app → **Open** → **Open**.
+
+Sessions and settings are stored in `~/.mobaxtern/`.
+
+## Run from source
+
+### Requirements
+
+- Python 3.10+
+- Tkinter (included with most Python installs; on Linux: `sudo apt install python3-tk`)
+
+### Install
 
 ```bash
+git clone https://github.com/Ahmadrezagh/MobaxTerN.git
 cd MobaxTerN
 python3 -m venv .venv
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
-pip install -r requirements.txt   # only paramiko
+pip install -r requirements.txt
 ```
 
-## Run
+### Start
 
 ```bash
 python main.py
@@ -32,13 +49,34 @@ python main.py
 
 ## Usage
 
-1. **File → New Session** — enter name, host, port, username, and password or key file
-2. Select a session and click **Connect** (or double-click the session)
-3. Use the **Command Line** tab for the remote shell
-4. Use the **SFTP** tab to browse folders, see the current path at the top, and upload/download files
+1. Click **New** and enter session details
+2. Click **Connect** on a session (or double-click it)
+3. **Left sidebar** — SFTP file browser
+4. **Right panel** — SSH command line
+5. Click **Disconnect** at the top of the SFTP sidebar to return to sessions
 
-Sessions are saved to `~/.mobaxtern/sessions.json`.
+## Build a release locally
+
+```bash
+pip install -r requirements-build.txt
+pyinstaller --noconfirm mobaxtern.spec
+```
+
+Output is in `dist/` (`.app` on macOS, folder on Windows/Linux).
+
+## Publish a GitHub release
+
+1. Update `VERSION` if needed
+2. Commit and push to `main`
+3. Create and push a tag:
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+GitHub Actions builds Windows, macOS, and Linux packages and attaches them to the release automatically.
 
 ## Notes
 
-This is a sample application. Passwords are stored locally in plain text. For production use, prefer SSH keys and a secure credential store.
+Passwords are stored locally in plain text at `~/.mobaxtern/sessions.json`. For production use, prefer SSH keys.

@@ -1,0 +1,113 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-build.txt
+
+      - name: Build
+        run: pyinstaller --noconfirm mobaxtern.spec
+
+      - name: Package
+        run: Compress-Archive -Path dist/MobaxterN -DestinationPath MobaxterN-windows-x64.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MobaxterN-windows-x64
+          path: MobaxterN-windows-x64.zip
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-build.txt
+
+      - name: Build
+        run: pyinstaller --noconfirm mobaxtern.spec
+
+      - name: Package
+        run: |
+          cd dist
+          zip -r ../MobaxterN-macos-universal.zip MobaxterN.app
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MobaxterN-macos-universal
+          path: MobaxterN-macos-universal.zip
+
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y python3-tk
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-build.txt
+
+      - name: Build
+        run: pyinstaller --noconfirm mobaxtern.spec
+
+      - name: Package
+        run: |
+          cd dist
+          tar -czf ../MobaxterN-linux-x64.tar.gz MobaxterN
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MobaxterN-linux-x64
+          path: MobaxterN-linux-x64.tar.gz
+
+  release:
+    needs: [build-windows, build-macos, build-linux]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: MobaxterN ${{ github.ref_name }}
+          generate_release_notes: true
+          files: |
+            artifacts/MobaxterN-windows-x64.zip
+            artifacts/MobaxterN-macos-universal.zip
+            artifacts/MobaxterN-linux-x64.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
